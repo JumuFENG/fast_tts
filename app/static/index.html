@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f2eb">
+  <title>声场 · 本地语音工作台</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f5f2eb;
+      --ink: #242a25;
+      --muted: #777d72;
+      --line: #dcded3;
+      --green: #345d4b;
+      --green-dark: #254536;
+      --lime: #dce89a;
+      --card: #fbfaf6;
+      --serif: "Iowan Old Style", "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+      --sans: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink); background: var(--paper);
+      font-family: var(--sans); letter-spacing: .01em;
+      background-image: radial-gradient(ellipse at 90% 5%, rgba(218, 225, 186, .38), transparent 32%),
+                        radial-gradient(ellipse at 4% 90%, rgba(219, 224, 211, .4), transparent 30%);
+    }
+    button, textarea, select, input { font: inherit; }
+    button { cursor: pointer; }
+    .shell { width: min(1160px, calc(100% - 64px)); margin: 0 auto; }
+    header { height: 78px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 14px; font-weight: 650; letter-spacing: .11em; }
+    .brand-mark { display: grid; place-items: center; width: 31px; height: 31px; border-radius: 50%; color: var(--lime); background: var(--green); }
+    .brand-mark svg { width: 17px; }
+    .header-meta { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #76a47d; box-shadow: 0 0 0 4px rgba(118,164,125,.13); }
+    main { padding: 66px 0 72px; }
+    .intro { display: grid; grid-template-columns: 1fr auto; align-items: end; margin-bottom: 35px; }
+    .eyebrow { color: var(--green); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; font-weight: 700; }
+    h1 { margin: 13px 0 0; font: 400 clamp(36px, 5vw, 58px)/1.12 var(--serif); letter-spacing: -.045em; }
+    .intro p { max-width: 290px; margin: 0 0 5px; color: var(--muted); font-size: 13px; line-height: 1.8; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(290px, .82fr); gap: 18px; align-items: stretch; }
+    .panel { border: 1px solid var(--line); border-radius: 15px; background: rgba(251,250,246,.88); box-shadow: 0 14px 44px rgba(45,55,42,.045); }
+    .compose { padding: 27px 29px 25px; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 19px; }
+    .section-title { font-size: 13px; font-weight: 650; }
+    .step { color: #9b9e91; font: 12px var(--serif); }
+    .count { color: #a0a294; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+    .input-toolbar { display: flex; justify-content: space-between; align-items: center; margin: 0 1px 8px; }
+    .clear-button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 7px; border: 0; border-radius: 5px; color: #72786c; background: transparent; font-size: 10px; transition: color .2s, background .2s; }
+    .clear-button:hover { color: var(--green-dark); background: #edf0e7; }
+    .clear-button svg { width: 13px; height: 13px; }
+    .toolbar-hint { color: #a1a394; font-size: 10px; }
+    textarea {
+      display: block; width: 100%; min-height: 400px; resize: vertical; border: 1px solid var(--line); border-radius: 9px;
+      padding: 17px 18px; color: var(--ink); background: #fffefa; font-size: 15px; line-height: 1.85; outline: none; transition: border .2s, box-shadow .2s;
+    }
+    textarea::placeholder { color: #b5b7ad; }
+    textarea:focus, select:focus, .upload-box:focus-within { border-color: #799584; box-shadow: 0 0 0 3px rgba(68,112,87,.09); }
+    .options { display: grid; grid-template-columns: 1fr 140px; gap: 13px; margin-top: 22px; }
+    .field-label { display: block; margin: 0 0 9px; color: #656b60; font-size: 11px; letter-spacing: .07em; }
+    select { width: 100%; height: 43px; padding: 0 12px; color: var(--ink); background: #fffefa; border: 1px solid var(--line); border-radius: 8px; outline: none; }
+    .mode-switch { display: flex; gap: 5px; padding: 4px; margin-top: 19px; border-radius: 8px; background: #efefe7; }
+    .mode-button { flex: 1; min-height: 34px; border: 0; border-radius: 6px; color: #73786c; background: transparent; font-size: 11px; transition: background .18s, color .18s, box-shadow .18s; }
+    .mode-button[aria-pressed="true"] { color: var(--green-dark); background: var(--card); box-shadow: 0 1px 4px rgba(30,45,32,.1); }
+    .upload-box { display: flex; justify-content: space-between; align-items: center; min-height: 62px; padding: 10px 13px; border: 1px dashed #c8ccbf; border-radius: 8px; background: #fffefa; }
+    .upload-box input { width: 100%; color: var(--muted); font-size: 11px; }
+    .upload-box input::file-selector-button { margin-right: 10px; padding: 7px 10px; border: 0; border-radius: 5px; color: var(--green-dark); background: #eaf0e5; font-size: 11px; cursor: pointer; }
+    .upload-hint { color: #96998c; font-size: 10px; }
+    .upload-wrap[hidden] { display: none; }
+    .submit-row { display: flex; align-items: center; gap: 14px; margin-top: 23px; }
+    .generate { display: inline-flex; justify-content: center; align-items: center; gap: 11px; min-width: 165px; height: 48px; padding: 0 19px; border: 0; border-radius: 7px; color: #f8f8ed; background: var(--green); font-size: 12px; font-weight: 600; letter-spacing: .05em; transition: background .2s, transform .2s; }
+    .generate:hover:not(:disabled) { background: var(--green-dark); transform: translateY(-1px); }
+    .generate:disabled { opacity: .62; cursor: wait; }
+    .generate svg { width: 15px; }
+    .submit-note { color: #999b90; font-size: 10px; line-height: 1.6; }
+    .result { display: flex; flex-direction: column; min-height: 100%; padding: 27px 24px 21px; overflow: hidden; color: #f3f2e9; background: var(--green); border-color: var(--green); position: relative; }
+    .result::after { content: ""; position: absolute; width: 250px; height: 250px; right: -123px; top: 105px; border: 1px solid rgba(221,232,154,.15); border-radius: 50%; box-shadow: 0 0 0 27px rgba(221,232,154,.035), 0 0 0 56px rgba(221,232,154,.025); pointer-events: none; }
+    .result .section-head { position: relative; z-index: 1; }
+    .result .step { color: rgba(243,242,233,.5); }
+    .result .section-title { color: #f1f0e7; }
+    .sound-stage { flex: 1; min-height: 105px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; z-index: 1; }
+    .orbit { display: flex; align-items: center; justify-content: center; gap: 5px; width: 188px; height: 92px; }
+    .bar { width: 3px; border-radius: 8px; background: var(--lime); opacity: .78; transform: scaleY(.16); transform-origin: center; }
+    .bar:nth-child(1), .bar:nth-child(21) { height: 15px; opacity: .35; }
+    .bar:nth-child(2), .bar:nth-child(20) { height: 27px; }
+    .bar:nth-child(3), .bar:nth-child(19) { height: 40px; }
+    .bar:nth-child(4), .bar:nth-child(18) { height: 53px; }
+    .bar:nth-child(5), .bar:nth-child(17) { height: 67px; }
+    .bar:nth-child(6), .bar:nth-child(16) { height: 48px; }
+    .bar:nth-child(7), .bar:nth-child(15) { height: 78px; }
+    .bar:nth-child(8), .bar:nth-child(14) { height: 59px; }
+    .bar:nth-child(9), .bar:nth-child(13) { height: 37px; }
+    .bar:nth-child(10), .bar:nth-child(12) { height: 54px; }
+    .bar:nth-child(11) { height: 80px; }
+    .result.is-active .bar { animation: pulse 760ms ease-in-out infinite alternate; }
+    .result.is-active .bar:nth-child(3n) { animation-delay: -390ms; }
+    .result.is-active .bar:nth-child(2n) { animation-delay: -170ms; }
+    @keyframes pulse { to { transform: scaleY(.95); opacity: 1; } }
+    .status { margin-top: 23px; color: rgba(243,242,233,.73); font: 13px var(--serif); text-align: center; }
+    .status-detail { margin-top: 7px; color: rgba(243,242,233,.48); font-size: 10px; text-align: center; }
+    .player-wrap { position: relative; z-index: 1; margin-top: auto; }
+    .history { position: relative; z-index: 1; margin-top: auto; border-top: 1px solid rgba(241,240,231,.2); }
+    .history-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 0 9px; color: rgba(243,242,233,.64); font-size: 10px; letter-spacing: .08em; }
+    .history-list { display: grid; gap: 8px; max-height: 300px; overflow-y: auto; padding-right: 2px; }
+    .history-empty { padding: 2px 0 9px; color: rgba(243,242,233,.42); font-size: 10px; }
+    .history-item { padding: 10px 11px 9px; border: 1px solid rgba(243,242,233,.15); border-radius: 8px; background: rgba(20,48,35,.2); }
+    .history-title-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 7px; }
+    .history-title { overflow: hidden; color: #f3f2e9; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; max-width: 266px; }
+    .history-time { flex: 0 0 auto; color: rgba(243,242,233,.43); font-size: 9px; }
+    .history-item audio { display: block; width: 100%; height: 32px; }
+    .history-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+    .history-download { color: var(--lime); font-size: 9px; text-decoration: none; }
+    .history-download:hover { text-decoration: underline; }
+    .footnote { display: flex; justify-content: space-between; margin-top: 23px; color: #999b90; font-size: 10px; }
+    .footnote span:first-child { display: flex; align-items: center; gap: 7px; }
+    .footnote svg { width: 12px; color: var(--green); }
+    .error { color: #ffc7a9 !important; }
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 34px, 570px); }
+      header { height: 66px; }
+      main { padding: 43px 0 45px; }
+      .intro { display: block; margin-bottom: 24px; }
+      h1 { margin-top: 10px; font-size: 43px; }
+      .intro p { margin-top: 12px; max-width: 370px; font-size: 12px; }
+      .workspace { grid-template-columns: 1fr; gap: 13px; }
+      .compose { padding: 22px 19px; }
+      .result { min-height: 360px; padding: 22px 20px 18px; }
+      .sound-stage { min-height: 183px; }
+      .footnote { line-height: 1.6; }
+    }
+    @media (max-width: 390px) {
+      .shell { width: calc(100% - 26px); }
+      .options { grid-template-columns: 1fr 105px; gap: 9px; }
+      .submit-row { align-items: flex-start; flex-direction: column; gap: 9px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="M3 10h2l2-5 3.2 10L13 7l1.5 3H17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>声场 <span style="font-weight:400;color:#92968a;letter-spacing:.04em">/ LOCAL VOICE STUDIO</span></div>
+      <div class="header-meta"><span class="live-dot"></span>本地合成</div>
+    </header>
+    <main>
+      <section class="intro">
+        <div><div class="eyebrow">QWEN · SPEECH SYNTHESIS</div><h1>让文字，<br>拥有自己的声音。</h1></div>
+        <p>写下想说的话，选择一把合适的声音。音频将在生成过程中实时抵达。</p>
+      </section>
+      <section class="workspace" aria-label="语音生成工作台">
+        <form class="panel compose" id="tts-form" novalidate>
+          <div class="section-head"><div class="section-title">生成语音</div><span class="step">01 — INPUT</span></div>
+          <div class="input-toolbar"><button class="clear-button" id="clear-text" type="button" aria-label="清空输入框"><svg viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6 4.5V3h4v1.5m2 0-.5 8h-7l-.5-8m3 2v4m2-4v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>清空</button><span class="count"><span id="char-count">0</span> 字</span></div>
+          <textarea id="text" placeholder="在这里写下一段文字……&#10;&#10;一段故事、一句问候，或任何你想听见的内容。" required></textarea>
+          <div class="options">
+            <div><label class="field-label" for="voice">音色</label><select id="voice"><option value="default">正在读取音色…</option></select></div>
+            <div><label class="field-label" for="lang">语言</label><select id="lang"><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></div>
+          </div>
+          <div class="mode-switch" role="group" aria-label="音色来源">
+            <button class="mode-button" type="button" data-mode="voice" aria-pressed="true">使用音色库</button>
+            <button class="mode-button" type="button" data-mode="upload" aria-pressed="false">上传参考音频</button>
+          </div>
+          <div class="upload-wrap" id="upload-wrap" hidden>
+            <label class="field-label" for="speaker-ref" style="margin-top:14px">参考音频 <span class="upload-hint">WAV / MP3 · 最大 10 MB</span></label>
+            <div class="upload-box"><input id="speaker-ref" type="file" accept="audio/wav,audio/mpeg,.wav,.mp3"></div>
+          </div>
+          <div class="submit-row">
+            <button class="generate" id="generate" type="submit"><svg viewBox="0 0 20 20" fill="none"><path d="M5 3.8a.8.8 0 0 1 1.2-.7l9.1 5.5a1.6 1.6 0 0 1 0 2.8l-9.1 5.5a.8.8 0 0 1-1.2-.7V3.8Z" fill="currentColor"/></svg><span>生成并播放</span></button>
+            <div class="submit-note">长文本按段连续生成<br>生成过程可随时停止</div>
+          </div>
+        </form>
+
+        <section class="panel result" id="result" aria-label="播放结果">
+          <div class="section-head"><div class="section-title">声音预览</div><span class="step">02 — LISTEN</span></div>
+          <div class="sound-stage">
+            <div class="orbit" aria-hidden="true" id="waveform"></div>
+            <div class="status" id="status" aria-live="polite">准备好时，按下生成</div>
+            <div class="status-detail" id="status-detail">声音会在生成途中开始播放</div>
+          </div>
+          <div class="history">
+            <div class="history-head"><span>生成记录</span><span id="history-count">0 条</span></div>
+            <div class="history-list" id="history-list"><div class="history-empty">生成成功的音频会保留在这里。</div></div>
+          </div>
+        </section>
+      </section>
+      <div class="footnote"><span><svg viewBox="0 0 16 16" fill="none"><path d="M8 1.8 13 4v3.5c0 3-2 5.3-5 6.7-3-1.4-5-3.7-5-6.7V4l5-2.2Z" stroke="currentColor" stroke-width="1.2"/><path d="m5.7 7.8 1.5 1.5 3.2-3.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>音频由本机服务生成，不会离开你的设备</span><span>LOCAL · PRIVATE · YOURS</span></div>
+    </main>
+  </div>
+  <script>
+    const form = document.querySelector('#tts-form');
+    const textInput = document.querySelector('#text');
+    const clearTextButton = document.querySelector('#clear-text');
+    const voiceSelect = document.querySelector('#voice');
+    const fileInput = document.querySelector('#speaker-ref');
+    const uploadWrap = document.querySelector('#upload-wrap');
+    const generateButton = document.querySelector('#generate');
+    const statusEl = document.querySelector('#status');
+    const detailEl = document.querySelector('#status-detail');
+    const resultPanel = document.querySelector('#result');
+    const historyList = document.querySelector('#history-list');
+    const bars = document.querySelector('#waveform');
+    let mode = 'voice';
+    let controller;
+    let audioContext;
+    let nextPlaybackTime = 0;
+    let activeSources = 0;
+    let playbackStarted = false;
+    let streamFinished = false;
+    const historyUrls = [];
+
+    for (let i = 0; i < 21; i++) {
+      const bar = document.createElement('span');
+      bar.className = 'bar';
+      bars.append(bar);
+    }
+
+    document.querySelectorAll('.mode-button').forEach(button => button.addEventListener('click', () => {
+      mode = button.dataset.mode;
+      document.querySelectorAll('.mode-button').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+      uploadWrap.hidden = mode !== 'upload';
+      fileInput.required = mode === 'upload';
+    }));
+
+    function updateCharCount() {
+      document.querySelector('#char-count').textContent = Array.from(textInput.value).length;
+    }
+
+    textInput.addEventListener('input', updateCharCount);
+    clearTextButton.addEventListener('click', () => {
+      textInput.value = '';
+      updateCharCount();
+      textInput.focus();
+    });
+
+    fetch('/voices').then(response => {
+      if (!response.ok) throw new Error('音色列表读取失败');
+      return response.json();
+    }).then(data => {
+      voiceSelect.replaceChildren(...data.voices.map(voice => {
+        const option = document.createElement('option');
+        option.value = voice.id;
+        option.textContent = voice.description;
+        option.selected = voice.id === data.default;
+        return option;
+      }));
+    }).catch(() => {
+      voiceSelect.replaceChildren(new Option('音色列表不可用', 'default'));
+      setStatus('无法连接语音服务', '请确认本地服务已启动。', true);
+    });
+
+    function setStatus(title, detail, isError = false) {
+      statusEl.textContent = title;
+      statusEl.classList.toggle('error', isError);
+      detailEl.textContent = detail;
+    }
+
+    function splitText(text, limit = 2000) {
+      const characters = Array.from(text.trim());
+      const segments = [];
+      let start = 0;
+      while (characters.length - start > limit) {
+        let end = start + limit;
+        for (let i = end - 1; i > start; i--) {
+          if (/[。！？.!?\n]/.test(characters[i])) { end = i + 1; break; }
+        }
+        segments.push(characters.slice(start, end).join(''));
+        start = end;
+      }
+      if (start < characters.length) segments.push(characters.slice(start).join(''));
+      return segments;
+    }
+
+    function parseWaveHeader(bytes) {
+      if (bytes.length < 12) return null;
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      if (String.fromCharCode(...bytes.subarray(0, 4)) !== 'RIFF' || String.fromCharCode(...bytes.subarray(8, 12)) !== 'WAVE') {
+        throw new Error('返回内容不是有效的 WAV 音频');
+      }
+      let offset = 12;
+      let format;
+      while (offset + 8 <= bytes.length) {
+        const id = String.fromCharCode(...bytes.subarray(offset, offset + 4));
+        const size = view.getUint32(offset + 4, true);
+        if (id === 'fmt ' && offset + 24 <= bytes.length) {
+          format = {
+            type: view.getUint16(offset + 8, true),
+            channels: view.getUint16(offset + 10, true),
+            sampleRate: view.getUint32(offset + 12, true),
+            bits: view.getUint16(offset + 22, true)
+          };
+        }
+        if (id === 'data') {
+          if (!format) return null;
+          if (![1, 3].includes(format.type) || (format.type === 3 && format.bits !== 32)) throw new Error(`暂不支持 WAV 编码格式 ${format.type}/${format.bits}`);
+          if (format.channels < 1 || format.channels > 2 || ![8, 16, 24, 32].includes(format.bits)) throw new Error('暂不支持此 WAV 声道或位深');
+          return { format, offset: offset + 8 };
+        }
+        if (size > 1024 * 1024 || offset + 8 + size > bytes.length) return null;
+        offset += 8 + size + (size & 1);
+      }
+      return null;
+    }
+
+    function decodeWaveFrames(bytes, format) {
+      const bytesPerSample = format.bits / 8;
+      const frameBytes = bytesPerSample * format.channels;
+      const frames = Math.floor(bytes.length / frameBytes);
+      if (!frames) return 0;
+      const view = new DataView(bytes.buffer, bytes.byteOffset, frames * frameBytes);
+      const buffer = audioContext.createBuffer(format.channels, frames, format.sampleRate);
+      for (let channel = 0; channel < format.channels; channel++) {
+        const output = buffer.getChannelData(channel);
+        for (let frame = 0; frame < frames; frame++) {
+          const offset = frame * frameBytes + channel * bytesPerSample;
+          let sample;
+          if (format.type === 3 && format.bits === 32) sample = view.getFloat32(offset, true);
+          else if (format.bits === 8) sample = (view.getUint8(offset) - 128) / 128;
+          else if (format.bits === 16) sample = view.getInt16(offset, true) / 32768;
+          else if (format.bits === 24) {
+            let value = view.getUint8(offset) | (view.getUint8(offset + 1) << 8) | (view.getUint8(offset + 2) << 16);
+            if (value & 0x800000) value |= 0xff000000;
+            sample = value / 8388608;
+          } else sample = view.getInt32(offset, true) / 2147483648;
+          output[frame] = Math.max(-1, Math.min(1, sample));
+        }
+      }
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      source.onended = () => {
+        activeSources--;
+        if (activeSources === 0 && playbackStarted && streamFinished) {
+          resultPanel.classList.remove('is-active');
+          setStatus('播放完成', '音频已生成，可重新播放或保存。');
+        }
+      };
+      const startAt = Math.max(nextPlaybackTime, audioContext.currentTime + 0.04);
+      source.start(startAt);
+      nextPlaybackTime = startAt + buffer.duration;
+      activeSources++;
+      if (!playbackStarted) {
+        playbackStarted = true;
+        resultPanel.classList.add('is-active');
+        setStatus('正在播放', '音频正在边生成边播放…');
+      }
+      return frames * frameBytes;
+    }
+
+    async function consumeAudio(response) {
+      const reader = response.body.getReader();
+      const pcmChunks = [];
+      let pending = new Uint8Array(0);
+      let wave = null;
+      let headerParsed = false;
+      let totalBytes = 0;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        totalBytes += value.length;
+        const joined = new Uint8Array(pending.length + value.length);
+        joined.set(pending);
+        joined.set(value, pending.length);
+        pending = joined;
+        if (!headerParsed) {
+          wave = parseWaveHeader(pending);
+          if (!wave) continue;
+          pending = pending.slice(wave.offset);
+          headerParsed = true;
+        }
+        const consumed = decodeWaveFrames(pending, wave.format);
+        if (consumed) {
+          pcmChunks.push(pending.slice(0, consumed));
+          pending = pending.slice(consumed);
+        }
+        if (totalBytes > 0) detailEl.textContent = `${(totalBytes / 1024).toFixed(0)} KB 已接收 · 实时播放中`;
+      }
+      if (!headerParsed) throw new Error('音频数据不完整');
+      if (pending.length) throw new Error('音频流末尾不是完整采样帧');
+      return { format: wave.format, pcmChunks, totalBytes };
+    }
+
+    function makeWaveBlob(format, pcmChunks) {
+      const dataSize = pcmChunks.reduce((size, chunk) => size + chunk.byteLength, 0);
+      if (dataSize + 36 > 0xffffffff) throw new Error('生成音频过大，无法保存为 WAV');
+      const header = new ArrayBuffer(44);
+      const view = new DataView(header);
+      const write = (offset, value) => [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
+      write(0, 'RIFF');
+      view.setUint32(4, dataSize + 36, true);
+      write(8, 'WAVE');
+      write(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, format.type, true);
+      view.setUint16(22, format.channels, true);
+      view.setUint32(24, format.sampleRate, true);
+      view.setUint32(28, format.sampleRate * format.channels * format.bits / 8, true);
+      view.setUint16(32, format.channels * format.bits / 8, true);
+      view.setUint16(34, format.bits, true);
+      write(36, 'data');
+      view.setUint32(40, dataSize, true);
+      return new Blob([header, new Blob(pcmChunks)], { type: 'audio/wav' });
+    }
+
+    function addHistory(text, blob, audioBytes) {
+      historyList.querySelector('.history-empty')?.remove();
+      const url = URL.createObjectURL(blob);
+      historyUrls.push(url);
+
+      const item = document.createElement('article');
+      item.className = 'history-item';
+      const titleRow = document.createElement('div');
+      titleRow.className = 'history-title-row';
+      const title = document.createElement('div');
+      title.className = 'history-title';
+      title.textContent = text.replace(/\s+/g, ' ').slice(0, 60);
+      title.title = text;
+      const time = document.createElement('time');
+      time.className = 'history-time';
+      time.dateTime = new Date().toISOString();
+      time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      titleRow.append(title, time);
+
+      const player = document.createElement('audio');
+      player.controls = true;
+      player.preload = 'metadata';
+      player.src = url;
+      player.setAttribute('aria-label', `播放：${title.textContent}`);
+      player.addEventListener('play', () => {
+        historyList.querySelectorAll('audio').forEach(other => { if (other !== player) other.pause(); });
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'history-actions';
+      const download = document.createElement('a');
+      download.className = 'history-download';
+      download.href = url;
+      download.download = `speech-${new Date().toISOString().replace(/[:.]/g, '-')}.wav`;
+      download.textContent = `下载 WAV · ${(audioBytes / 1024).toFixed(0)} KB`;
+      actions.append(download);
+      item.append(titleRow, player, actions);
+      historyList.prepend(item);
+      document.querySelector('#history-count').textContent = `${historyUrls.length} 条`;
+    }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (controller) { controller.abort(); return; }
+      const text = textInput.value.trim();
+      if (!text) { textInput.focus(); return; }
+      if (mode === 'upload' && !fileInput.files[0]) { fileInput.focus(); return; }
+      controller = new AbortController();
+      generateButton.disabled = false;
+      generateButton.querySelector('span').textContent = '停止生成';
+      resultPanel.classList.remove('is-active');
+      playbackStarted = false;
+      streamFinished = false;
+      activeSources = 0;
+      nextPlaybackTime = 0;
+      const segments = splitText(text);
+      const pcmChunks = [];
+      let waveFormat;
+      let totalBytes = 0;
+      setStatus('正在连接语音引擎', '准备接收音频流…');
+      try {
+        audioContext?.close();
+        audioContext = new AudioContext();
+        await audioContext.resume();
+        for (let index = 0; index < segments.length; index++) {
+          setStatus(`正在生成第 ${index + 1} / ${segments.length} 段`, '音频正在边生成边播放…');
+          const options = { method: 'POST', signal: controller.signal };
+          if (mode === 'upload') {
+            const body = new FormData();
+            body.append('text', segments[index]);
+            body.append('lang', document.querySelector('#lang').value);
+            body.append('speaker_ref', fileInput.files[0]);
+            options.body = body;
+          } else {
+            options.headers = { 'Content-Type': 'application/json' };
+            options.body = JSON.stringify({ text: segments[index], voice: voiceSelect.value, lang: document.querySelector('#lang').value });
+          }
+          const response = await fetch(mode === 'upload' ? '/tts/upload' : '/tts', options);
+          if (!response.ok) {
+            const message = await response.text();
+            throw new Error(message || `请求失败 (${response.status})`);
+          }
+          const part = await consumeAudio(response);
+          if (!waveFormat) waveFormat = part.format;
+          else if (Object.keys(waveFormat).some(key => waveFormat[key] !== part.format[key])) {
+            throw new Error('分段音频格式不一致，无法合并');
+          }
+          for (const chunk of part.pcmChunks) pcmChunks.push(chunk);
+          totalBytes += part.totalBytes;
+        }
+        const blob = makeWaveBlob(waveFormat, pcmChunks);
+        addHistory(text, blob, totalBytes);
+        streamFinished = true;
+        if (activeSources === 0) {
+          resultPanel.classList.remove('is-active');
+          setStatus('音频已生成', '可在生成记录中播放、拖动进度或下载。');
+        } else {
+          detailEl.textContent = `${(totalBytes / 1024).toFixed(0)} KB · 已完整接收`;
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') setStatus('生成已停止', '可以修改文本后重新生成。');
+        else setStatus('生成失败', error.message || '请确认服务状态后重试。', true);
+      } finally {
+        generateButton.disabled = false;
+        generateButton.querySelector('span').textContent = '生成并播放';
+        controller = null;
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      controller?.abort();
+      historyUrls.forEach(url => URL.revokeObjectURL(url));
+    });
+  </script>
+</body>
+</html>
