@@ -35,11 +35,8 @@
     .brand-mark svg { width: 17px; }
     .header-meta { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
     .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #76a47d; box-shadow: 0 0 0 4px rgba(118,164,125,.13); }
-    main { padding: 66px 0 72px; }
-    .intro { display: grid; grid-template-columns: 1fr auto; align-items: end; margin-bottom: 35px; }
-    .eyebrow { color: var(--green); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; font-weight: 700; }
+    main { padding: 0 0 72px; }
     h1 { margin: 13px 0 0; font: 400 clamp(36px, 5vw, 58px)/1.12 var(--serif); letter-spacing: -.045em; }
-    .intro p { max-width: 290px; margin: 0 0 5px; color: var(--muted); font-size: 13px; line-height: 1.8; }
     .workspace { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(290px, .82fr); gap: 18px; align-items: stretch; }
     .panel { border: 1px solid var(--line); border-radius: 15px; background: rgba(251,250,246,.88); box-shadow: 0 14px 44px rgba(45,55,42,.045); }
     .compose { padding: 27px 29px 25px; }
@@ -100,6 +97,11 @@
     @keyframes pulse { to { transform: scaleY(.95); opacity: 1; } }
     .status { margin-top: 23px; color: rgba(243,242,233,.73); font: 13px var(--serif); text-align: center; }
     .status-detail { margin-top: 7px; color: rgba(243,242,233,.48); font-size: 10px; text-align: center; }
+    .stream-control { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; margin-top: 15px; padding: 0 12px; border: 1px solid rgba(243,242,233,.3); border-radius: 20px; color: var(--lime); background: rgba(20,48,35,.2); font-size: 10px; }
+    .stream-control:hover:not(:disabled) { border-color: var(--lime); background: rgba(20,48,35,.42); }
+    .stream-control:disabled { opacity: .4; cursor: default; }
+    .stream-control svg { width: 11px; height: 11px; }
+    .stream-control[hidden] { display: none; }
     .player-wrap { position: relative; z-index: 1; margin-top: auto; }
     .history { position: relative; z-index: 1; margin-top: auto; border-top: 1px solid rgba(241,240,231,.2); }
     .history-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 0 9px; color: rgba(243,242,233,.64); font-size: 10px; letter-spacing: .08em; }
@@ -121,9 +123,7 @@
       .shell { width: min(100% - 34px, 570px); }
       header { height: 66px; }
       main { padding: 43px 0 45px; }
-      .intro { display: block; margin-bottom: 24px; }
       h1 { margin-top: 10px; font-size: 43px; }
-      .intro p { margin-top: 12px; max-width: 370px; font-size: 12px; }
       .workspace { grid-template-columns: 1fr; gap: 13px; }
       .compose { padding: 22px 19px; }
       .result { min-height: 360px; padding: 22px 20px 18px; }
@@ -141,17 +141,13 @@
 <body>
   <div class="shell">
     <header>
-      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="M3 10h2l2-5 3.2 10L13 7l1.5 3H17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>声场 <span style="font-weight:400;color:#92968a;letter-spacing:.04em">/ LOCAL VOICE STUDIO</span></div>
-      <div class="header-meta"><span class="live-dot"></span>本地合成</div>
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="M3 10h2l2-5 3.2 10L13 7l1.5 3H17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>语音生成</div>
+      <div class="header-meta"><span class="live-dot"></span>local</div>
     </header>
     <main>
-      <section class="intro">
-        <div><div class="eyebrow">QWEN · SPEECH SYNTHESIS</div><h1>让文字，<br>拥有自己的声音。</h1></div>
-        <p>写下想说的话，选择一把合适的声音。音频将在生成过程中实时抵达。</p>
-      </section>
       <section class="workspace" aria-label="语音生成工作台">
         <form class="panel compose" id="tts-form" novalidate>
-          <div class="section-head"><div class="section-title">生成语音</div><span class="step">01 — INPUT</span></div>
+          <div class="section-head"><div class="section-title">输入文本</div><span class="step">01 — INPUT</span></div>
           <div class="input-toolbar"><button class="clear-button" id="clear-text" type="button" aria-label="清空输入框"><svg viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6 4.5V3h4v1.5m2 0-.5 8h-7l-.5-8m3 2v4m2-4v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>清空</button><span class="count"><span id="char-count">0</span> 字</span></div>
           <textarea id="text" placeholder="在这里写下一段文字……&#10;&#10;一段故事、一句问候，或任何你想听见的内容。" required></textarea>
           <div class="options">
@@ -178,6 +174,7 @@
             <div class="orbit" aria-hidden="true" id="waveform"></div>
             <div class="status" id="status" aria-live="polite">准备好时，按下生成</div>
             <div class="status-detail" id="status-detail">声音会在生成途中开始播放</div>
+            <button class="stream-control" id="stream-control" type="button" aria-pressed="false" hidden disabled><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 3h3v10H4zm5 0h3v10H9z"/></svg><span>暂停播放</span></button>
           </div>
           <div class="history">
             <div class="history-head"><span>生成记录</span><span id="history-count">0 条</span></div>
@@ -185,7 +182,7 @@
           </div>
         </section>
       </section>
-      <div class="footnote"><span><svg viewBox="0 0 16 16" fill="none"><path d="M8 1.8 13 4v3.5c0 3-2 5.3-5 6.7-3-1.4-5-3.7-5-6.7V4l5-2.2Z" stroke="currentColor" stroke-width="1.2"/><path d="m5.7 7.8 1.5 1.5 3.2-3.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>音频由本机服务生成，不会离开你的设备</span><span>LOCAL · PRIVATE · YOURS</span></div>
+      <div class="footnote"><svg viewBox="0 0 16 16" fill="none"><path d="M8 1.8 13 4v3.5c0 3-2 5.3-5 6.7-3-1.4-5-3.7-5-6.7V4l5-2.2Z" stroke="currentColor" stroke-width="1.2"/><path d="m5.7 7.8 1.5 1.5 3.2-3.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg><span>LOCAL · PRIVATE · YOURS</span></div>
     </main>
   </div>
   <script>
@@ -199,6 +196,7 @@
     const statusEl = document.querySelector('#status');
     const detailEl = document.querySelector('#status-detail');
     const resultPanel = document.querySelector('#result');
+    const streamControl = document.querySelector('#stream-control');
     const historyList = document.querySelector('#history-list');
     const bars = document.querySelector('#waveform');
     let mode = 'voice';
@@ -206,8 +204,20 @@
     let audioContext;
     let nextPlaybackTime = 0;
     let activeSources = 0;
-    let playbackStarted = false;
+    let queuedSeconds = 0;
+    let isPlaying = false;
+    let hasStartedPlayback = false;
     let streamFinished = false;
+    let streamError = null;
+    let isUserPaused = false;
+    let playbackTimer;
+    let playbackGeneration = 0;
+    let hasAudio = false;
+    const audioQueue = [];
+    const INITIAL_BUFFER_SECONDS = 1.2;
+    const RESUME_BUFFER_SECONDS = 0.8;
+    const PLAY_AHEAD_SECONDS = 2.5;
+    const LOW_WATER_SECONDS = 0.15;
     const historyUrls = [];
 
     for (let i = 0; i < 21; i++) {
@@ -256,20 +266,14 @@
       detailEl.textContent = detail;
     }
 
-    function splitText(text, limit = 2000) {
-      const characters = Array.from(text.trim());
-      const segments = [];
-      let start = 0;
-      while (characters.length - start > limit) {
-        let end = start + limit;
-        for (let i = end - 1; i > start; i--) {
-          if (/[。！？.!?\n]/.test(characters[i])) { end = i + 1; break; }
-        }
-        segments.push(characters.slice(start, end).join(''));
-        start = end;
-      }
-      if (start < characters.length) segments.push(characters.slice(start).join(''));
-      return segments;
+    function updateStreamControl() {
+      streamControl.hidden = false;
+      streamControl.disabled = !hasAudio;
+      streamControl.setAttribute('aria-pressed', String(isUserPaused));
+      streamControl.querySelector('span').textContent = isUserPaused ? '继续播放' : '暂停播放';
+      streamControl.querySelector('svg').innerHTML = isUserPaused
+        ? '<path d="M5 3.8a.8.8 0 0 1 1.2-.7l6.1 3.7a1.5 1.5 0 0 1 0 2.6l-6.1 3.7a.8.8 0 0 1-1.2-.7V3.8Z"/>'
+        : '<path d="M4 3h3v10H4zm5 0h3v10H9z"/>';
     }
 
     function parseWaveHeader(bytes) {
@@ -326,26 +330,72 @@
           output[frame] = Math.max(-1, Math.min(1, sample));
         }
       }
-      const source = audioContext.createBufferSource();
-      source.buffer = buffer;
-      source.connect(audioContext.destination);
-      source.onended = () => {
-        activeSources--;
-        if (activeSources === 0 && playbackStarted && streamFinished) {
-          resultPanel.classList.remove('is-active');
-          setStatus('播放完成', '音频已生成，可重新播放或保存。');
-        }
-      };
-      const startAt = Math.max(nextPlaybackTime, audioContext.currentTime + 0.04);
-      source.start(startAt);
-      nextPlaybackTime = startAt + buffer.duration;
-      activeSources++;
-      if (!playbackStarted) {
-        playbackStarted = true;
-        resultPanel.classList.add('is-active');
-        setStatus('正在播放', '音频正在边生成边播放…');
-      }
+      audioQueue.push(buffer);
+      queuedSeconds += buffer.duration;
+      hasAudio = true;
+      updateStreamControl();
+      pumpAudio();
       return frames * frameBytes;
+    }
+
+    function finishPlayback() {
+      if (playbackTimer) clearInterval(playbackTimer);
+      playbackTimer = null;
+      isPlaying = false;
+      resultPanel.classList.remove('is-active');
+      streamControl.hidden = true;
+      if (streamError) setStatus(streamError.title, streamError.detail, true);
+      else if (hasStartedPlayback) setStatus('播放完成', '音频已生成，可重新播放或保存。');
+      else setStatus('音频已生成', '可在生成记录中播放或下载。');
+    }
+
+    function pumpAudio() {
+      if (!audioContext || audioContext.state !== 'running') return;
+      const now = audioContext.currentTime;
+      if (!isPlaying) {
+        const threshold = hasStartedPlayback ? RESUME_BUFFER_SECONDS : INITIAL_BUFFER_SECONDS;
+        if (queuedSeconds < threshold && !streamFinished) {
+          if (hasAudio && !streamError) {
+            resultPanel.classList.remove('is-active');
+            setStatus('正在缓冲音频', '缓冲中，待数据足够后继续播放。');
+          }
+          return;
+        }
+        if (!audioQueue.length) {
+          if (streamFinished && activeSources === 0) finishPlayback();
+          return;
+        }
+        isPlaying = true;
+        hasStartedPlayback = true;
+        resultPanel.classList.add('is-active');
+        if (!streamError) setStatus('正在播放', '音频正在边接收边播放…');
+      }
+
+      while (audioQueue.length && nextPlaybackTime - now < PLAY_AHEAD_SECONDS) {
+        const buffer = audioQueue.shift();
+        queuedSeconds -= buffer.duration;
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        const generation = playbackGeneration;
+        source.onended = () => {
+          if (generation !== playbackGeneration) return;
+          activeSources = Math.max(0, activeSources - 1);
+          pumpAudio();
+        };
+        const startAt = Math.max(nextPlaybackTime, audioContext.currentTime + 0.04);
+        source.start(startAt);
+        nextPlaybackTime = startAt + buffer.duration;
+        activeSources++;
+      }
+
+      const scheduledAhead = nextPlaybackTime - audioContext.currentTime;
+      if (!audioQueue.length && scheduledAhead <= LOW_WATER_SECONDS && !streamFinished) {
+        isPlaying = false;
+        resultPanel.classList.remove('is-active');
+        if (!streamError) setStatus('正在缓冲音频', '缓冲中，待数据足够后继续播放。');
+      }
+      if (streamFinished && !audioQueue.length && activeSources === 0) finishPlayback();
     }
 
     async function consumeAudio(response) {
@@ -374,7 +424,10 @@
           pcmChunks.push(pending.slice(0, consumed));
           pending = pending.slice(consumed);
         }
-        if (totalBytes > 0) detailEl.textContent = `${(totalBytes / 1024).toFixed(0)} KB 已接收 · 实时播放中`;
+        if (totalBytes > 0) {
+          const state = isUserPaused ? '已暂停 · 仍在接收' : isPlaying ? '播放中' : '缓冲中';
+          detailEl.textContent = `${(totalBytes / 1024).toFixed(0)} KB 已接收 · ${state}`;
+        }
       }
       if (!headerParsed) throw new Error('音频数据不完整');
       if (pending.length) throw new Error('音频流末尾不是完整采样帧');
@@ -454,61 +507,79 @@
       generateButton.disabled = false;
       generateButton.querySelector('span').textContent = '停止生成';
       resultPanel.classList.remove('is-active');
-      playbackStarted = false;
+      if (playbackTimer) clearInterval(playbackTimer);
+      playbackTimer = null;
+      streamControl.hidden = false;
+      streamControl.disabled = true;
+      isUserPaused = false;
+      playbackGeneration++;
+      audioQueue.length = 0;
+      queuedSeconds = 0;
+      isPlaying = false;
+      hasStartedPlayback = false;
       streamFinished = false;
+      streamError = null;
+      hasAudio = false;
       activeSources = 0;
       nextPlaybackTime = 0;
-      const segments = splitText(text);
-      const pcmChunks = [];
-      let waveFormat;
-      let totalBytes = 0;
       setStatus('正在连接语音引擎', '准备接收音频流…');
       try {
         audioContext?.close();
         audioContext = new AudioContext();
         await audioContext.resume();
-        for (let index = 0; index < segments.length; index++) {
-          setStatus(`正在生成第 ${index + 1} / ${segments.length} 段`, '音频正在边生成边播放…');
-          const options = { method: 'POST', signal: controller.signal };
-          if (mode === 'upload') {
-            const body = new FormData();
-            body.append('text', segments[index]);
-            body.append('lang', document.querySelector('#lang').value);
-            body.append('speaker_ref', fileInput.files[0]);
-            options.body = body;
-          } else {
-            options.headers = { 'Content-Type': 'application/json' };
-            options.body = JSON.stringify({ text: segments[index], voice: voiceSelect.value, lang: document.querySelector('#lang').value });
-          }
-          const response = await fetch(mode === 'upload' ? '/tts/upload' : '/tts', options);
-          if (!response.ok) {
-            const message = await response.text();
-            throw new Error(message || `请求失败 (${response.status})`);
-          }
-          const part = await consumeAudio(response);
-          if (!waveFormat) waveFormat = part.format;
-          else if (Object.keys(waveFormat).some(key => waveFormat[key] !== part.format[key])) {
-            throw new Error('分段音频格式不一致，无法合并');
-          }
-          for (const chunk of part.pcmChunks) pcmChunks.push(chunk);
-          totalBytes += part.totalBytes;
-        }
-        const blob = makeWaveBlob(waveFormat, pcmChunks);
-        addHistory(text, blob, totalBytes);
-        streamFinished = true;
-        if (activeSources === 0) {
-          resultPanel.classList.remove('is-active');
-          setStatus('音频已生成', '可在生成记录中播放、拖动进度或下载。');
+        playbackTimer = setInterval(pumpAudio, 100);
+        const options = { method: 'POST', signal: controller.signal };
+        if (mode === 'upload') {
+          const body = new FormData();
+          body.append('text', text);
+          body.append('lang', document.querySelector('#lang').value);
+          body.append('speaker_ref', fileInput.files[0]);
+          options.body = body;
         } else {
-          detailEl.textContent = `${(totalBytes / 1024).toFixed(0)} KB · 已完整接收`;
+          options.headers = { 'Content-Type': 'application/json' };
+          options.body = JSON.stringify({ text, voice: voiceSelect.value, lang: document.querySelector('#lang').value });
         }
+        setStatus('正在生成语音', '音频正在边生成边播放…');
+        const response = await fetch(mode === 'upload' ? '/tts/upload' : '/tts', options);
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || `请求失败 (${response.status})`);
+        }
+        const result = await consumeAudio(response);
+        const blob = makeWaveBlob(result.format, result.pcmChunks);
+        addHistory(text, blob, result.totalBytes);
+        streamFinished = true;
+        detailEl.textContent = `${(result.totalBytes / 1024).toFixed(0)} KB · 已完整接收`;
+        pumpAudio();
       } catch (error) {
-        if (error.name === 'AbortError') setStatus('生成已停止', '可以修改文本后重新生成。');
-        else setStatus('生成失败', error.message || '请确认服务状态后重试。', true);
+        const aborted = error.name === 'AbortError';
+        streamError = {
+          title: aborted ? '生成已停止' : '生成失败',
+          detail: aborted ? '可以修改文本后重新生成。' : (error.message || '请确认服务状态后重试。')
+        };
+        streamFinished = true;
+        pumpAudio();
+        setStatus(streamError.title, streamError.detail, true);
+        if (!hasAudio) streamControl.hidden = true;
       } finally {
         generateButton.disabled = false;
         generateButton.querySelector('span').textContent = '生成并播放';
         controller = null;
+      }
+    });
+
+    streamControl.addEventListener('click', async () => {
+      if (!audioContext) return;
+      if (isUserPaused) {
+        await audioContext.resume();
+        isUserPaused = false;
+        updateStreamControl();
+        pumpAudio();
+      } else {
+        isUserPaused = true;
+        await audioContext.suspend();
+        updateStreamControl();
+        setStatus('已暂停播放', '音频流仍在接收和缓冲，点击继续播放。');
       }
     });
 

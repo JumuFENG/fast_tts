@@ -1,0 +1,50 @@
+[app]
+host = "127.0.0.1"
+port = 9933
+ffmpeg = "ffmpeg"
+
+[llama_tts]
+host = "127.0.0.1"
+port = 9932
+command = ["llama-server", "-hf", "ggml-org/Qwen3-TTS-12Hz-1.7B-Base-GGUF:Q4_K_M", "-c", "4096", "-ngl", "99", "--host", "{host}", "--port", "{port}"]
+startup_timeout = 60
+max_audio_frames = 4096
+
+[voices]
+directory = "~/tts/voices"
+default = "default"
+
+[voices.items.default]
+file = "female_gentle.wav"
+description = "默认"
+name = "默认"
+gender = "女"
+speaker = "default"
+
+[voices.items.female_gentle]
+file = "female_gentle.wav"
+description = "温柔女声"
+name = "温柔女声"
+gender = "女"
+speaker = "female_gentle"
+
+[voices.items.female_bright]
+file = "female_bright.wav"
+description = "明亮女声"
+name = "明亮女声"
+gender = "女"
+speaker = "female_bright"
+
+[voices.items.male_mature]
+file = "male_mature.wav"
+description = "成熟男声"
+name = "成熟男声"
+gender = "男"
+speaker = "male_mature"
+
+[voices.items.male_young]
+file = "male_young.wav"
+description = "年轻男声"
+name = "年轻男声"
+gender = "男"
+speaker = "male_young"
