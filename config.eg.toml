@@ -9,6 +9,7 @@ port = 9932
 command = ["llama-server", "-hf", "ggml-org/Qwen3-TTS-12Hz-1.7B-Base-GGUF:Q4_K_M", "-c", "4096", "-ngl", "99", "--host", "{host}", "--port", "{port}"]
 startup_timeout = 60
 max_audio_frames = 4096
+max_text_length = 1440
 
 [voices]
 directory = "~/tts/voices"

@@ -26,6 +26,7 @@ LLAMA_URL = f"http://{LLAMA_HOST}:{LLAMA_PORT}"
 LLAMA_COMMAND = CONFIG["llama_tts"]["command"]
 STARTUP_TIMEOUT = CONFIG["llama_tts"]["startup_timeout"]
 MAX_AUDIO_FRAMES = CONFIG["llama_tts"]["max_audio_frames"]
+MAX_TEXT_LENGTH = CONFIG["llama_tts"]["max_text_length"]
 VOICE_DIR = Path(CONFIG["voices"]["directory"])
 VOICES = CONFIG["voices"]["items"]
 DEFAULT_VOICE = CONFIG["voices"]["default"]
@@ -164,14 +165,11 @@ async def generate_migpt_tts(
 
 
 
-MAX_TEXT_CHARS_PER_REQUEST = 1600
-
-
 def split_text(text):
     remaining = text.strip()
     segments = []
-    while len(remaining) > MAX_TEXT_CHARS_PER_REQUEST:
-        end = MAX_TEXT_CHARS_PER_REQUEST
+    while len(remaining) > MAX_TEXT_LENGTH:
+        end = MAX_TEXT_LENGTH
         for index in range(end - 1, 0, -1):
             if remaining[index] in "。！？.!?\n":
                 end = index + 1
