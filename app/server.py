@@ -5,12 +5,13 @@ import struct
 import subprocess
 import time
 from pathlib import Path
+from typing import Literal
 
 import httpx2 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from fastapi import UploadFile, File, Form
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from app.config import CONFIG
 
 app = FastAPI(title="Local Qwen TTS")
@@ -68,6 +69,20 @@ class TTSRequest(BaseModel):
     text: str = Field(min_length=1)
     voice: str = DEFAULT_VOICE
     lang: str = "zh"
+    response_format: Literal["mp3", "wav"] = "mp3"
+
+
+class OpenAISpeechRequest(BaseModel):
+    model: str
+    input: str = Field(min_length=1, max_length=4096)
+    voice: str = "alloy"
+    response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] = "mp3"
+    speed: float = Field(default=1.0, ge=0.25, le=4.0)
+    instructions: str | None = None
+    stream_format: Literal["audio", "sse"] = "audio"
+
+
+OPENAI_VOICES = CONFIG.get("openai_tts", {}).get("voices", {})
 
 
 @app.get("/voices")
@@ -122,46 +137,7 @@ async def generate_migpt_tts(
     if voice_file.is_file():
         speaker_ref_b64 = base64.b64encode(voice_file.read_bytes()).decode("ascii")
 
-    wav_response = await generate_tts_stream(text, "zh", speaker_ref_b64)
-    try:
-        wav = b"".join([chunk async for chunk in wav_response.body_iterator])
-    except HTTPException:
-        raise
-    except Exception as error:
-        raise HTTPException(502, f"TTS generation failed: {error}") from error
-
-    try:
-        process = await asyncio.create_subprocess_exec(
-            FFMPEG,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
-            "pipe:0",
-            "-vn",
-            "-codec:a",
-            "libmp3lame",
-            "-q:a",
-            "4",
-            "-f",
-            "mp3",
-            "pipe:1",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-    except FileNotFoundError as error:
-        raise HTTPException(503, f"FFmpeg executable not found: {FFMPEG}") from error
-
-    mp3, error = await process.communicate(wav)
-    if process.returncode:
-        message = error.decode("utf-8", errors="replace")
-        raise HTTPException(502, f"WAV to MP3 conversion failed: {message}")
-    return Response(
-        content=mp3,
-        media_type="audio/mpeg",
-        headers={"Content-Disposition": 'inline; filename="speech.mp3"'},
-    )
+    return await generate_tts_response(text, "zh", speaker_ref_b64, "mp3")
 
 
 
@@ -302,6 +278,135 @@ async def generate_tts_stream(text, lang, speaker_ref_b64=None):
     )
 
 
+async def transcode_audio_stream(wav_response, response_format="mp3", speed=1.0):
+    output_formats = {
+        "mp3": ("libmp3lame", "mp3", "audio/mpeg", "speech.mp3"),
+        "opus": ("libopus", "opus", "audio/ogg", "speech.opus"),
+        "aac": ("aac", "adts", "audio/aac", "speech.aac"),
+        "flac": ("flac", "flac", "audio/flac", "speech.flac"),
+        "wav": ("pcm_s16le", "wav", "audio/wav", "speech.wav"),
+        "pcm": ("pcm_s16le", "s16le", "audio/pcm", "speech.pcm"),
+    }
+    codec, container, media_type, filename = output_formats[response_format]
+    atempo = []
+    tempo = speed
+    while tempo < 0.5:
+        atempo.append("atempo=0.5")
+        tempo *= 2
+    while tempo > 2.0:
+        atempo.append("atempo=2.0")
+        tempo /= 2
+    if speed != 1.0:
+        atempo.append(f"atempo={tempo:g}")
+    try:
+        command = [
+            FFMPEG,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            "pipe:0",
+            "-vn",
+        ]
+        if atempo:
+            command.extend(["-filter:a", ",".join(atempo)])
+        command.extend(["-codec:a", codec])
+        if response_format == "mp3":
+            command.extend(["-q:a", "4"])
+        command.extend(["-flush_packets", "1", "-f", container, "pipe:1"])
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except OSError as error:
+        await wav_response.body_iterator.aclose()
+        raise HTTPException(503, f"Cannot start FFmpeg ({FFMPEG}): {error}") from error
+
+    async def feed_ffmpeg():
+        try:
+            async for chunk in wav_response.body_iterator:
+                process.stdin.write(chunk)
+                await process.stdin.drain()
+        finally:
+            process.stdin.close()
+            await process.stdin.wait_closed()
+
+    async def read_errors():
+        return await process.stderr.read()
+
+    async def mp3_stream():
+        feeder = asyncio.create_task(feed_ffmpeg())
+        errors = asyncio.create_task(read_errors())
+        try:
+            while chunk := await process.stdout.read(64 * 1024):
+                yield chunk
+            await feeder
+            error_output = await errors
+            return_code = await process.wait()
+            if return_code:
+                message = error_output.decode("utf-8", errors="replace")
+                raise RuntimeError(f"FFmpeg audio conversion failed: {message}")
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+            for task in (feeder, errors):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(feeder, errors, return_exceptions=True)
+
+    return StreamingResponse(
+        mp3_stream(),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def generate_mp3_stream(wav_response):
+    return await transcode_audio_stream(wav_response)
+
+
+async def generate_tts_response(text, lang, speaker_ref_b64, response_format):
+    if response_format == "wav":
+        return await generate_tts_stream(text, lang, speaker_ref_b64)
+    if response_format != "mp3":
+        raise HTTPException(400, "response_format must be 'mp3' or 'wav'")
+    wav_response = await generate_tts_stream(text, lang, speaker_ref_b64)
+    return await generate_mp3_stream(wav_response)
+
+
+@app.post("/v1/audio/speech")
+async def openai_create_speech(req: OpenAISpeechRequest):
+    if not req.input.strip():
+        raise HTTPException(422, "input must not be blank")
+    if req.stream_format == "sse":
+        raise HTTPException(400, "stream_format='sse' is not supported; use 'audio'")
+    if req.instructions:
+        raise HTTPException(400, "instructions are not supported by the configured llama-tts model")
+
+    voice_id = OPENAI_VOICES.get(req.voice, req.voice)
+    voice = VOICES.get(voice_id)
+    if voice is None:
+        raise HTTPException(400, f"Unknown voice: {req.voice}")
+    speaker_file = VOICE_DIR / voice["file"]
+    if voice_id != DEFAULT_VOICE and not speaker_file.is_file():
+        raise HTTPException(400, f"Voice is unavailable: {req.voice}")
+    speaker_ref_b64 = None
+    if speaker_file.is_file():
+        speaker_ref_b64 = base64.b64encode(speaker_file.read_bytes()).decode("ascii")
+
+    wav_response = await generate_tts_stream(req.input, "zh", speaker_ref_b64)
+    if req.response_format == "wav" and req.speed == 1.0:
+        return wav_response
+    return await transcode_audio_stream(wav_response, req.response_format, req.speed)
+
+
 @app.post("/tts")
 async def generate_tts(req: TTSRequest):
     voice = VOICES.get(req.voice)
@@ -314,7 +419,9 @@ async def generate_tts(req: TTSRequest):
         speaker_ref_b64 = base64.b64encode(
             speaker_file.read_bytes()
         ).decode("ascii")
-    return await generate_tts_stream(req.text, req.lang, speaker_ref_b64)
+    return await generate_tts_response(
+        req.text, req.lang, speaker_ref_b64, req.response_format
+    )
 
 
 
@@ -323,6 +430,7 @@ async def generate_tts_upload(
     text: str = Form(...),
     speaker_ref: UploadFile = File(...),
     lang: str = Form("zh"),
+    response_format: Literal["mp3", "wav"] = Form("mp3"),
 ):
     if speaker_ref.content_type not in ("audio/wav", "audio/mpeg"):
         raise HTTPException(400, "Only WAV or MP3 is supported")
@@ -336,4 +444,6 @@ async def generate_tts_upload(
         raise HTTPException(422, "Text must not be blank")
 
     speaker_ref_b64 = base64.b64encode(audio).decode("ascii")
-    return await generate_tts_stream(text, lang, speaker_ref_b64)
+    return await generate_tts_response(
+        text, lang, speaker_ref_b64, response_format
+    )

@@ -55,7 +55,7 @@
     }
     textarea::placeholder { color: #b5b7ad; }
     textarea:focus, select:focus, .upload-box:focus-within { border-color: #799584; box-shadow: 0 0 0 3px rgba(68,112,87,.09); }
-    .options { display: grid; grid-template-columns: 1fr 140px; gap: 13px; margin-top: 22px; }
+    .options { display: grid; grid-template-columns: 1fr 120px 120px; gap: 13px; margin-top: 22px; }
     .field-label { display: block; margin: 0 0 9px; color: #656b60; font-size: 11px; letter-spacing: .07em; }
     select { width: 100%; height: 43px; padding: 0 12px; color: var(--ink); background: #fffefa; border: 1px solid var(--line); border-radius: 8px; outline: none; }
     .mode-switch { display: flex; gap: 5px; padding: 4px; margin-top: 19px; border-radius: 8px; background: #efefe7; }
@@ -132,7 +132,7 @@
     }
     @media (max-width: 390px) {
       .shell { width: calc(100% - 26px); }
-      .options { grid-template-columns: 1fr 105px; gap: 9px; }
+      .options { grid-template-columns: 1fr 100px 100px; gap: 9px; }
       .submit-row { align-items: flex-start; flex-direction: column; gap: 9px; }
     }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
@@ -153,6 +153,7 @@
           <div class="options">
             <div><label class="field-label" for="voice">音色</label><select id="voice"><option value="default">正在读取音色…</option></select></div>
             <div><label class="field-label" for="lang">语言</label><select id="lang"><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></div>
+            <div><label class="field-label" for="audio-format">音频格式</label><select id="audio-format"><option value="wav">WAV</option><option value="mp3">MP3</option></select></div>
           </div>
           <div class="mode-switch" role="group" aria-label="音色来源">
             <button class="mode-button" type="button" data-mode="voice" aria-pressed="true">使用音色库</button>
@@ -164,7 +165,7 @@
           </div>
           <div class="submit-row">
             <button class="generate" id="generate" type="submit"><svg viewBox="0 0 20 20" fill="none"><path d="M5 3.8a.8.8 0 0 1 1.2-.7l9.1 5.5a1.6 1.6 0 0 1 0 2.8l-9.1 5.5a.8.8 0 0 1-1.2-.7V3.8Z" fill="currentColor"/></svg><span>生成并播放</span></button>
-            <div class="submit-note">长文本按段连续生成<br>生成过程可随时停止</div>
+            <div class="submit-note">长文本按段连续生成<br>WAV 边生成边播放 · MP3 完成后播放</div>
           </div>
         </form>
 
@@ -190,6 +191,7 @@
     const textInput = document.querySelector('#text');
     const clearTextButton = document.querySelector('#clear-text');
     const voiceSelect = document.querySelector('#voice');
+    const formatSelect = document.querySelector('#audio-format');
     const fileInput = document.querySelector('#speaker-ref');
     const uploadWrap = document.querySelector('#upload-wrap');
     const generateButton = document.querySelector('#generate');
@@ -456,7 +458,7 @@
       return new Blob([header, new Blob(pcmChunks)], { type: 'audio/wav' });
     }
 
-    function addHistory(text, blob, audioBytes) {
+    function addHistory(text, blob, audioBytes, format) {
       historyList.querySelector('.history-empty')?.remove();
       const url = URL.createObjectURL(blob);
       historyUrls.push(url);
@@ -489,18 +491,20 @@
       const download = document.createElement('a');
       download.className = 'history-download';
       download.href = url;
-      download.download = `speech-${new Date().toISOString().replace(/[:.]/g, '-')}.wav`;
-      download.textContent = `下载 WAV · ${(audioBytes / 1024).toFixed(0)} KB`;
+      download.download = `speech-${new Date().toISOString().replace(/[:.]/g, '-')}.${format}`;
+      download.textContent = `下载 ${format.toUpperCase()} · ${(audioBytes / 1024).toFixed(0)} KB`;
       actions.append(download);
       item.append(titleRow, player, actions);
       historyList.prepend(item);
       document.querySelector('#history-count').textContent = `${historyUrls.length} 条`;
+      return player;
     }
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
       if (controller) { controller.abort(); return; }
       const text = textInput.value.trim();
+      const audioFormat = formatSelect.value;
       if (!text) { textInput.focus(); return; }
       if (mode === 'upload' && !fileInput.files[0]) { fileInput.focus(); return; }
       controller = new AbortController();
@@ -533,11 +537,12 @@
           const body = new FormData();
           body.append('text', text);
           body.append('lang', document.querySelector('#lang').value);
+          body.append('response_format', audioFormat);
           body.append('speaker_ref', fileInput.files[0]);
           options.body = body;
         } else {
           options.headers = { 'Content-Type': 'application/json' };
-          options.body = JSON.stringify({ text, voice: voiceSelect.value, lang: document.querySelector('#lang').value });
+          options.body = JSON.stringify({ text, voice: voiceSelect.value, lang: document.querySelector('#lang').value, response_format: audioFormat });
         }
         setStatus('正在生成语音', '音频正在边生成边播放…');
         const response = await fetch(mode === 'upload' ? '/tts/upload' : '/tts', options);
@@ -545,12 +550,35 @@
           const message = await response.text();
           throw new Error(message || `请求失败 (${response.status})`);
         }
-        const result = await consumeAudio(response);
-        const blob = makeWaveBlob(result.format, result.pcmChunks);
-        addHistory(text, blob, result.totalBytes);
-        streamFinished = true;
-        detailEl.textContent = `${(result.totalBytes / 1024).toFixed(0)} KB · 已完整接收`;
-        pumpAudio();
+        if (audioFormat === 'wav') {
+          const result = await consumeAudio(response);
+          const blob = makeWaveBlob(result.format, result.pcmChunks);
+          addHistory(text, blob, result.totalBytes, audioFormat);
+          streamFinished = true;
+          detailEl.textContent = `${(result.totalBytes / 1024).toFixed(0)} KB · 已完整接收`;
+          pumpAudio();
+        } else {
+          const chunks = [];
+          let totalBytes = 0;
+          const reader = response.body.getReader();
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            totalBytes += value.length;
+            detailEl.textContent = `${(totalBytes / 1024).toFixed(0)} KB 已接收 · MP3 播放将在生成完成后开始`;
+          }
+          const blob = new Blob(chunks, { type: 'audio/mpeg' });
+          const player = addHistory(text, blob, totalBytes, audioFormat);
+          streamFinished = true;
+          if (playbackTimer) clearInterval(playbackTimer);
+          playbackTimer = null;
+          await audioContext?.close();
+          audioContext = null;
+          streamControl.hidden = true;
+          setStatus('音频已生成', 'MP3 已完整接收，正在开始播放。');
+          player.play().catch(() => setStatus('音频已生成', '点击记录中的播放按钮开始播放。'));
+        }
       } catch (error) {
         const aborted = error.name === 'AbortError';
         streamError = {
